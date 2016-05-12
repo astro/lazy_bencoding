@@ -1,5 +1,5 @@
 [package]
-name = "lazy-bencoding"
+name = "lazy_bencoding"
 version = "0.1.0"
 authors = ["Astro <astro@spaceboyz.net>"]
 
