@@ -1,6 +1,10 @@
 [package]
 name = "lazy_bencoding"
+description = "Lazy BEncoding parser that gives you iterators over byte slices"
 version = "0.1.0"
 authors = ["Astro <astro@spaceboyz.net>"]
+license = "MIT"
+license-file = "LICENSE"
+repository = "https://github.com/astro/lazy_bencoding"
 
 [dependencies]
