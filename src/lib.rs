@@ -1,112 +1,84 @@
-pub struct BEncoded {
-    data: Vec<u8>
+pub struct BEncoded<'a> {
+    data: &'a [u8],
+    finished: bool,
 }
 
-impl BEncoded {
-    pub fn new(data: Vec<u8>) -> Self {
+impl<'a> BEncoded<'a> {
+    pub fn new(data: &'a [u8]) -> Self {
         BEncoded {
-            data: data
+            data: data,
+            finished: false,
         }
-    }
-}
-
-pub struct BEncodedParser<'a> {
-    bencoded: &'a BEncoded,
-    position: usize
-}
-
-impl<'a> BEncodedParser<'a> {
-    fn read_integer(&mut self) -> u64 {
-        let mut value = 0;
-        let data = &self.bencoded.data;
-
-        loop {
-            let ch = data[self.position] as char;
-            if ch >= '0' && ch <= '9' {
-                value = value * 10 + (ch as u64 - '0' as u64);
-                self.position += 1;
-            } else {
-                break
-            }
-        }
-        value
     }
 }
 
 #[derive(Eq, PartialEq, Debug)]
 pub enum Token<'a> {
     ByteString(&'a [u8]),
-    Integer(i64),
+    Integer(&'a [u8]),
     ListStart,
     DictStart,
-    End
+    End,
 }
 
-impl<'a> IntoIterator for &'a BEncoded {
-    type Item = Token<'a>;
-    type IntoIter = BEncodedParser<'a>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        BEncodedParser {
-            bencoded: self,
-            position: 0
-        }
-    }
-}
-
-impl<'a> Iterator for BEncodedParser<'a> {
+impl<'a> Iterator for BEncoded<'a> {
     type Item = Token<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let data = &self.bencoded.data;
-        if self.position >= data.len() {
+        let data = self.data;
+        if data.len() < 1 || self.finished {
             // Already done
-            return None
+            return None;
         }
 
-        match data[self.position] as char {
+        match data[0] as char {
             'i' => {
-                self.position += 1;
+                let mut pos = 1;
+                while data[pos] as char != 'e' {
+                    pos += 1;
+                }
+                let token = Token::Integer(&data[1..pos]);
+                self.data = &self.data[(pos + 1)..];
+                Some(token)
+            }
+            ch @ '0'...'9' => {
+                let mut len = ch as usize - '0' as usize;
+                let mut pos = 1;
+                while pos < data.len() {
+                    let ch = data[pos] as char;
+                    pos += 1;
+                    if ch >= '0' && ch <= '9' {
+                        len = 10 * len + ch as usize - '0' as usize;
+                    } else if ch == ':' {
+                        break;
+                    } else {
+                        // Error
+                        return None;
+                    }
+                }
 
-                let sig = if data[self.position] as char == '-' {
-                    self.position += 1;
-                    -1
+                if pos + len <= data.len() {
+                    let buf = &data[pos..(pos + len)];
+                    self.data = &data[(pos + len)..];
+                    Some(Token::ByteString(buf))
                 } else {
-                    1
-                };
-                let value = self.read_integer();
-                if data[self.position] as char == 'e' {
-                    self.position += 1;
-                    Some(Token::Integer(sig * value as i64))
-                } else {
-                    // Error: terminate
+                    // Not enough data for this string
                     None
                 }
-            },
-            '0'...'9' => {
-                let len = self.read_integer() as usize;
-                if data[self.position] as char == ':' && self.position + 1 + len <= data.len() {
-                    self.position += 1;
-                    let str = &data[self.position..(self.position + len)];
-                    self.position += len;
-                    Some(Token::ByteString(str))
-                } else {
-                    None
-                }
-            },
+            }
             'l' => {
-                self.position += 1;
+                self.data = &self.data[1..];
                 Some(Token::ListStart)
-            },
+            }
             'd' => {
-                self.position += 1;
+                self.data = &self.data[1..];
                 Some(Token::DictStart)
-            },
+            }
             'e' => {
-                self.position += 1;
+                self.data = &self.data[1..];
                 Some(Token::End)
-            },
-            _ => None  // Unexpected: terminate
+            }
+            _ => None,  // Unexpected: terminate
         }
     }
 }
@@ -114,12 +86,10 @@ impl<'a> Iterator for BEncodedParser<'a> {
 #[cfg(test)]
 mod tests {
     fn expect(input: &'static [u8], expected: &[::Token<'static>]) {
-        let mut input_buf = Vec::with_capacity(input.len());
-        input_buf.extend_from_slice(input);
-        let benc = ::BEncoded::new(input_buf);
+        let benc = ::BEncoded::new(input);
 
         let mut result = Vec::with_capacity(expected.len());
-        for token in &benc {
+        for token in benc {
             result.push(token);
         }
         assert_eq!(result, expected);
@@ -132,39 +102,36 @@ mod tests {
 
     #[test]
     fn test_integers() {
-        expect(b"i3e", &[::Token::Integer(3)]);
-        expect(b"i-3e", &[::Token::Integer(-3)]);
-        expect(b"i0e", &[::Token::Integer(0)]);
+        expect(b"i3e", &[::Token::Integer(b"3")]);
+        expect(b"i-3e", &[::Token::Integer(b"-3")]);
+        expect(b"i0e", &[::Token::Integer(b"0")]);
     }
 
     #[test]
     fn test_lists() {
-        expect(b"l4:spam4:eggse", &[
-            ::Token::ListStart,
-            ::Token::ByteString(b"spam"),
-            ::Token::ByteString(b"eggs"),
-            ::Token::End
-        ]);
+        expect(b"l4:spam4:eggse",
+               &[::Token::ListStart,
+                 ::Token::ByteString(b"spam"),
+                 ::Token::ByteString(b"eggs"),
+                 ::Token::End]);
     }
 
     #[test]
     fn test_dict() {
-        expect(b"d3:cow3:moo4:spam4:eggse", &[
-            ::Token::DictStart,
-            ::Token::ByteString(b"cow"),
-            ::Token::ByteString(b"moo"),
-            ::Token::ByteString(b"spam"),
-            ::Token::ByteString(b"eggs"),
-            ::Token::End
-        ]);
-        expect(b"d4:spaml1:a1:bee", &[
-            ::Token::DictStart,
-            ::Token::ByteString(b"spam"),
-            ::Token::ListStart,
-            ::Token::ByteString(b"a"),
-            ::Token::ByteString(b"b"),
-            ::Token::End,
-            ::Token::End
-        ]);
+        expect(b"d3:cow3:moo4:spam4:eggse",
+               &[::Token::DictStart,
+                 ::Token::ByteString(b"cow"),
+                 ::Token::ByteString(b"moo"),
+                 ::Token::ByteString(b"spam"),
+                 ::Token::ByteString(b"eggs"),
+                 ::Token::End]);
+        expect(b"d4:spaml1:a1:bee",
+               &[::Token::DictStart,
+                 ::Token::ByteString(b"spam"),
+                 ::Token::ListStart,
+                 ::Token::ByteString(b"a"),
+                 ::Token::ByteString(b"b"),
+                 ::Token::End,
+                 ::Token::End]);
     }
 }
