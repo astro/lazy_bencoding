@@ -85,13 +85,9 @@ impl<'a> Iterator for BEncoded<'a> {
 
 #[cfg(test)]
 mod tests {
-    fn expect(input: &'static [u8], expected: &[::Token<'static>]) {
-        let benc = ::BEncoded::new(input);
-
-        let mut result = Vec::with_capacity(expected.len());
-        for token in benc {
-            result.push(token);
-        }
+    fn expect<'a>(input: &'a [u8], expected: &[::Token<'a>]) {
+        let bencoded = ::BEncoded::new(input);
+        let result = bencoded.collect::<Vec<::Token<'a>>>();
         assert_eq!(result, expected);
     }
 
