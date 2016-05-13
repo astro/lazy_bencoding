@@ -17,7 +17,7 @@ use parse::*;
 ///
 /// * iterate over `bencoded` to process all [`Token`](enum.Token.html) in order, or
 /// * traverse the structure using [`get()`](#method.get) and [`get_utf8_string()`](#method.get_utf8_string).
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct BEncoded<'a> {
     /// Next data to parse, only a cheap reference and updated with
     /// each [`next()`](#method.next)
