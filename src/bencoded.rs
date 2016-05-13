@@ -2,13 +2,35 @@ use token::*;
 use parse::*;
 
 
+/// Token iterator instance
+///
+/// # Example
+/// ```ignore
+/// extern crate lazy_bencoding;
+/// use lazy_bencoding::*;
+///
+/// let bencoded = BEncoded::new(&data[..]);
+/// let name = bencoded.get(b"info").get(b"name").get_utf8_string();
+/// ```
+///
+/// You may now:
+///
+/// * iterate over `bencoded` to process all [`Token`](enum.Token.html) in order, or
+/// * traverse the structure using [`get()`](#method.get) and [`get_utf8_string()`](#method.get_utf8_string).
 #[derive(Clone, Copy)]
 pub struct BEncoded<'a> {
+    /// Next data to parse, only a cheap reference and updated with
+    /// each [`next()`](#method.next)
     pub data: &'a [u8],
+    /// Keeping track of the depth, for:
+    ///
+    /// * traversing, and
+    /// * stopping after one item, before trailing data.
     pub depth: i16,
 }
 
 impl<'a> BEncoded<'a> {
+    /// Construct from a pointer to data
     pub fn new(data: &'a [u8]) -> Self {
         BEncoded {
             data: data,
@@ -16,6 +38,8 @@ impl<'a> BEncoded<'a> {
         }
     }
 
+    /// Construct with empty data,
+    /// used for when traversing fails
     pub fn empty() -> BEncoded<'static> {
         BEncoded {
             data: b"",
@@ -24,6 +48,7 @@ impl<'a> BEncoded<'a> {
     }
 }
 
+/// The [token](enum.Token.html) stream. Advances `self.data` and updates `self.depth`.
 impl<'a> Iterator for BEncoded<'a> {
     type Item = Token<'a>;
 

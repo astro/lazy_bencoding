@@ -6,6 +6,7 @@ use dict::*;
 use list::*;
 
 impl<'a> BEncoded<'a> {
+    /// Is the remaining `data` a dict?
     pub fn is_dict(&self) -> bool {
         match parse_token(self.data) {
             Some((Token::DictStart, _)) => true,
@@ -13,6 +14,7 @@ impl<'a> BEncoded<'a> {
         }
     }
 
+    /// Is the remaining `data` a list?
     pub fn is_list(&self) -> bool {
         match parse_token(self.data) {
             Some((Token::ListStart, _)) => true,
@@ -20,6 +22,7 @@ impl<'a> BEncoded<'a> {
         }
     }
 
+    /// Is the remaining `data` a string? Then get it as a cheap slice.
     pub fn get_byte_string(&self) -> Option<&'a [u8]> {
         match parse_token(self.data) {
             Some((Token::ByteString(s), _)) => Some(s),
@@ -27,6 +30,7 @@ impl<'a> BEncoded<'a> {
         }
     }
 
+    /// Is the remaining `data` a string? Then get it as checked UTF-8.
     pub fn get_utf8_string(&self) -> Option<&'a str> {
         self.get_byte_string()
             .and_then(|s| match from_utf8(s) {
@@ -35,6 +39,7 @@ impl<'a> BEncoded<'a> {
             })
     }
 
+    /// Is the remaining `data` an integer? If so, parse and return it.
     pub fn get_integer(&self) -> Option<i64> {
         let s = match parse_token(self.data) {
             Some((Token::Integer(bs), _)) => bs,
@@ -63,6 +68,10 @@ impl<'a> BEncoded<'a> {
         Some(sig * value)
     }
 
+    /// Used by [`dict()`](#method.dict) and [`list()`](#method.list)
+    ///
+    /// Restricts the `BEncoded<'a>` to a single item (string,
+    /// integer, list, or dict). Also returns the trailing data.
     pub fn this_and_rest(mut self) -> Option<(BEncoded<'a>, &'a [u8])> {
         let data = &self.data[..];
         while self.depth >= 0 {
@@ -76,14 +85,30 @@ impl<'a> BEncoded<'a> {
         Some((this, self.data))
     }
 
-    pub fn dict(&self) -> DictIterator {
-        DictIterator::new(self.data)
-    }
-
+    /// If the remaining data is a list, return value fulfills
+    /// `Iterator<Item=BEncoded<'a>>`
     pub fn list(&self) -> ListIterator {
         ListIterator::new(self.data)
     }
 
+    /// If the remaining data is a dict, return value fulfills
+    /// `Iterator<Item=(BEncoded<'a>, BEncoded<'a>)>`
+    pub fn dict(&self) -> DictIterator {
+        DictIterator::new(self.data)
+    }
+
+    /// From a [`dict()`](#method.dict), get the value of key
+    /// `wanted_key`.
+    ///
+    /// In case the key is not present, we return an empty
+    /// instance. This allows chaining these calls conveniently:
+    ///
+    /// ```
+    /// # use self::lazy_bencoding::*;
+    /// let bencoded = BEncoded::new(b"d1:ad1:ad1:a4:spame1:bd1:a4:eggseee");
+    /// assert_eq!(bencoded.get(b"a").get(b"b").get(b"a").get_utf8_string(),
+    ///            Some("eggs"));
+    /// ```
     pub fn get(&'a self, wanted_key: &'a [u8]) -> Self {
         for (mut key, value) in self.dict() {
             match (key.next(), key.next()) {
