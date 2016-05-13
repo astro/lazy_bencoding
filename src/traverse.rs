@@ -182,6 +182,12 @@ mod tests {
     }
 
     #[test]
+    fn test_get_key_not_found() {
+        let bencoded = ::BEncoded::new(b"d1:a4:spam1:b4:eggs1:ci42ee");
+        assert_eq!(bencoded.get(b"x").data, b"");
+    }
+
+    #[test]
     fn test_get_key1() {
         let bencoded = ::BEncoded::new(b"d1:a4:spame");
         let a_bencoded = bencoded.get(b"a");
