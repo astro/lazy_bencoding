@@ -45,7 +45,7 @@ fn pretty_print<'a>(bencoded: BEncoded<'a>, padding: &str) {
                 format!("{}  - ", padding)
             } else {
                 let space_padding: String = padding.chars()
-                    .map(|c| ' ').collect();
+                    .map(|_| ' ').collect();
                 format!("{}  - ", space_padding)
             };
             pretty_print(elem, &padding);
